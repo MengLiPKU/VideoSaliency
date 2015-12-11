@@ -125,7 +125,7 @@ void vec2uchar(vector<double> normaledSalmap, unsigned char* &saliencyMap) {
 	}
 }
 
-void SalientRegionDetectionBasedOnFT(unsigned char *src, unsigned char* &saliencyMap, int width, int height, int stride)
+Mat spatialSaliency(unsigned char *src, int width, int height, int stride)
 {
     double meanL = 0, meanA = 0, meanB = 0;
     
@@ -165,5 +165,31 @@ void SalientRegionDetectionBasedOnFT(unsigned char *src, unsigned char* &salienc
 		salmap[i] = (meanL - slvec[i]) *  (meanL - slvec[i]) +  (meanA - savec[i]) *  (meanA - savec[i]) +  (meanB - sbvec[i]) *  (meanB - sbvec[i]);
     }
 	Normalize(salmap, normaledSalmap, width, height);                //    归一化图像数据
+
+	unsigned char* saliencyMap = new unsigned char[width * height];
 	vec2uchar(normaledSalmap, saliencyMap);
+
+	Mat ans = Mat(height, width, CV_8UC1, saliencyMap);
+	return ans;
+}
+
+Mat tSaliency(Mat preImg, Mat img) {
+	
+}
+
+void saliencyDetect(vector<string> imgPath) {
+	Mat preImg;
+	for(int i = 0; i < imgPath.size(); i++) {
+		Mat img = imread(imgPath[i]);
+		if(i == 0) {
+			Mat sSaliency = spatialSaliency(img.data, img.cols, img.rows, img.cols * img.channels);
+			imwrite("s_" + imgPath[i], sSaliency);
+		} else {
+			Mat sSaliency = spatialSaliency(img.data, img.cols, img.rows, img.cols * img.channels);
+			Mat tSaliency = temporalSaliency(preImg, img);
+			Mat blurSaliency = blurSpatialTemporal(sSaliency, tSaliency);
+			imwrite("s_" + imgPath[i], blurSaliency);
+		}
+		preImg = img;
+	}
 }

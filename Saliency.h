@@ -10,7 +10,9 @@
 using namespace cv;
 using namespace std;
 
-void SalientRegionDetectionBasedOnFT(unsigned char *Src, unsigned char* &SaliencyMap, int Width, int Height, int Stride);
-void RGBToLABF(unsigned char* Src, float* dst, int width);
+void saliencyDetect(vector<string> imgPath);
+Mat spatialSaliency(unsigned char *Src, int Width, int Height, int Stride);
+Mat temporalSaliency(Mat img1, Mat img2);
+Mat blurSpatialTemporal(Mat sSaliency, Mat tSaliency);
 
 #endif
