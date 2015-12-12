@@ -1,4 +1,7 @@
 ﻿#include "Saliency.h"
+#include "util.h"
+
+using namespace cv::detail;
 
 void RGBtoLAB(unsigned char* Src, vector<double>& lvec, vector<double>& avec, vector<double>& bvec, int width) {
 	for(int i = 0; i < width; i++) {
@@ -173,42 +176,69 @@ Mat spatialSaliency(unsigned char *src, int width, int height, int stride)
 	return ans;
 }
 
-Mat temporalSaliency(Mat preImg, Mat img) {
-	Mat ans;
-	int minHessian = 2000;
-	SurfFeatureDetector detector(minHessian);
-	vector<KeyPoint> keyPoints_pre, keyPoints_cur;
-	detector.detect(preImg, keyPoints_pre);
-	detector.detect(img, keyPoints_cur);
-
-	SurfDescriptorExtractor extractor;
-	Mat descriptor_pre, descriptor_cur;
-	extractor.compute(preImg, keyPoints_pre, descriptor_pre);
-	extractor.compute(img, keyPoints_cur, descriptor_cur);
-
-	FlannBasedMatcher matcher;
-	vector<DMatch> matches;
-	matcher.match(descriptor_pre, descriptor_cur, matches);
-	
-	double max_dist = 0, min_dist = 10000;
-
-	vector<DMatch> good_matches;
-	for(int i = 0; i < descriptor_pre.rows; i++) {
-		double dist = matches[i].distance;
-		min_dist = min(min_dist, dist);
-		max_dist = max(max_dist, dist);
+void check_matchInfo(MatchesInfo& match_info) {
+	int n = match_info.matches.size();
+	if(match_info.inliers_mask.size() < n) {
+		match_info.inliers_mask.resize(n, false);
 	}
+}
 
-	for(int i = 0; i < descriptor_pre.rows; i++) {
-		if(matches[i].distance < 3 * min_dist) {
-			good_matches.push_back(matches[i]);
+void getMatchIndex(ImageFeatures feat, MatchesInfo match_info, vector<int>& indice) {
+	int feat_num = feat.keypoints.size();
+	indice.resize(feat_num);
+	for(int i = 0; i < feat_num; i++)
+		indice[i] = -1;
+
+	if(match_info.inliers_mask.size() != match_info.matches.size())
+		return;
+
+	for(int i = 0; i < match_info.matches.size(); i++) {
+		const DMatch& m = match_info.matches[i];
+		if(match_info.inliers_mask[i]) {
+			indice[m.queryIdx] = m.trainIdx;
 		}
 	}
+}
 
-	Mat img_matches;
-	drawMatches(preImg, keyPoints_pre, img, keyPoints_cur, good_matches, img_matches, Scalar::all(-1), Scalar::all(-1), vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
-	imshow("test", img_matches);
-	cvWaitKey(0);
+void feature_match_bidirection(ImageFeatures feat1, ImageFeatures feat2, MatchesInfo& matchInfo) {
+	BestOf2NearestMatcher matcher(false, 0.3F);
+	MatchesInfo matchInfo21;
+	matcher(feat1, feat2, matchInfo);
+	check_matchInfo(matchInfo);
+	matcher(feat2, feat1, matchInfo21);
+	check_matchInfo(matchInfo21);
+	vector<int> indice12, indice21;
+	getMatchIndex(feat1, matchInfo, indice12);
+	getMatchIndex(feat2, matchInfo21, indice21);
+
+	int nInliers = 0;
+	for(int i = 0; i < matchInfo.matches.size(); i++) {
+		if(indice21[matchInfo.matches[i].queryIdx] == matchInfo.matches[i].queryIdx) {
+			nInliers++;
+		} else {
+			matchInfo.inliers_mask[i] = false;
+		}
+	}
+	matchInfo.num_inliers = nInliers;
+	matcher.collectGarbage();
+	matchInfo21.matches.clear();
+	matchInfo21.inliers_mask.clear();
+}
+
+Mat temporalSaliency(Mat preImg, Mat img) {
+	Mat ans;
+	vector<ImageFeatures> feats(2);
+	Ptr<FeaturesFinder> finder = new SurfFeaturesFinder();
+	(*finder)(preImg, feats[0]);
+	(*finder)(img, feats[1]);
+	finder->collectGarbage();
+	cout << feats[0].keypoints.size() << " " << feats[1].keypoints.size() << endl;
+
+	Mat drawImg;
+	MatchesInfo matchInfo;
+	feature_match_bidirection(feats[0], feats[1], matchInfo);
+	drawMatch(preImg, img, feats[0], feats[1], matchInfo, drawImg);
+	imwrite("test.jpg", drawImg);
 	return ans;
 }
 
@@ -220,16 +250,16 @@ Mat blurSpatialTemporal(Mat sSaliency, Mat tSaliency) {
 void saliencyDetect(vector<string> imgPath) {
 	Mat preImg;
 	for(int i = 0; i < imgPath.size(); i++) {
+		cout << imgPath[i] << endl;
 		Mat img = imread(imgPath[i]);
 		if(i == 0) {
-			Mat sSaliency = spatialSaliency(img.data, img.cols, img.rows, img.cols * img.channels());
-			imwrite("s_" + imgPath[i], sSaliency);
-			cout << "s_" + imgPath[i] << endl;
+			//Mat sSaliency = spatialSaliency(img.data, img.cols, img.rows, img.cols * img.channels());
+			//imwrite("s_" + imgPath[i], sSaliency);
 		} else {
-			Mat sSaliency = spatialSaliency(img.data, img.cols, img.rows, img.cols * img.channels());
+			//Mat sSaliency = spatialSaliency(img.data, img.cols, img.rows, img.cols * img.channels());
 			Mat tSaliency = temporalSaliency(preImg, img);
-			Mat blurSaliency = blurSpatialTemporal(sSaliency, tSaliency);
-			imwrite("s_" + imgPath[i], blurSaliency);
+			//Mat blurSaliency = blurSpatialTemporal(sSaliency, tSaliency);
+			//imwrite("s_" + imgPath[i], blurSaliency);
 		}
 		preImg = img;
 	}
