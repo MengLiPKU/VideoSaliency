@@ -201,7 +201,7 @@ void getMatchIndex(ImageFeatures feat, MatchesInfo match_info, vector<int>& indi
 }
 
 void feature_match_bidirection(ImageFeatures feat1, ImageFeatures feat2, MatchesInfo& matchInfo) {
-	BestOf2NearestMatcher matcher(false, 0.3F);
+	BestOf2NearestMatcher matcher(false, 0.3f);
 	MatchesInfo matchInfo21;
 	matcher(feat1, feat2, matchInfo);
 	check_matchInfo(matchInfo);
@@ -213,12 +213,15 @@ void feature_match_bidirection(ImageFeatures feat1, ImageFeatures feat2, Matches
 
 	int nInliers = 0;
 	for(int i = 0; i < matchInfo.matches.size(); i++) {
-		if(indice21[matchInfo.matches[i].queryIdx] == matchInfo.matches[i].queryIdx) {
-			nInliers++;
-		} else {
-			matchInfo.inliers_mask[i] = false;
+		if(matchInfo.inliers_mask[i]) {
+			if(indice21[matchInfo.matches[i].queryIdx] == matchInfo.matches[i].queryIdx) {
+				nInliers++;
+			} else {
+				matchInfo.inliers_mask[i] = false;
+			}
 		}
 	}
+	cout << nInliers << endl;
 	matchInfo.num_inliers = nInliers;
 	matcher.collectGarbage();
 	matchInfo21.matches.clear();
