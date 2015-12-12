@@ -173,8 +173,48 @@ Mat spatialSaliency(unsigned char *src, int width, int height, int stride)
 	return ans;
 }
 
-Mat tSaliency(Mat preImg, Mat img) {
+Mat temporalSaliency(Mat preImg, Mat img) {
+	Mat ans;
+	int minHessian = 2000;
+	SurfFeatureDetector detector(minHessian);
+	vector<KeyPoint> keyPoints_pre, keyPoints_cur;
+	detector.detect(preImg, keyPoints_pre);
+	detector.detect(img, keyPoints_cur);
+
+	SurfDescriptorExtractor extractor;
+	Mat descriptor_pre, descriptor_cur;
+	extractor.compute(preImg, keyPoints_pre, descriptor_pre);
+	extractor.compute(img, keyPoints_cur, descriptor_cur);
+
+	FlannBasedMatcher matcher;
+	vector<DMatch> matches;
+	matcher.match(descriptor_pre, descriptor_cur, matches);
 	
+	double max_dist = 0, min_dist = 10000;
+
+	vector<DMatch> good_matches;
+	for(int i = 0; i < descriptor_pre.rows; i++) {
+		double dist = matches[i].distance;
+		min_dist = min(min_dist, dist);
+		max_dist = max(max_dist, dist);
+	}
+
+	for(int i = 0; i < descriptor_pre.rows; i++) {
+		if(matches[i].distance < 3 * min_dist) {
+			good_matches.push_back(matches[i]);
+		}
+	}
+
+	Mat img_matches;
+	drawMatches(preImg, keyPoints_pre, img, keyPoints_cur, good_matches, img_matches, Scalar::all(-1), Scalar::all(-1), vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
+	imshow("test", img_matches);
+	cvWaitKey(0);
+	return ans;
+}
+
+Mat blurSpatialTemporal(Mat sSaliency, Mat tSaliency) {
+	Mat ans;
+	return ans;
 }
 
 void saliencyDetect(vector<string> imgPath) {
@@ -182,10 +222,11 @@ void saliencyDetect(vector<string> imgPath) {
 	for(int i = 0; i < imgPath.size(); i++) {
 		Mat img = imread(imgPath[i]);
 		if(i == 0) {
-			Mat sSaliency = spatialSaliency(img.data, img.cols, img.rows, img.cols * img.channels);
+			Mat sSaliency = spatialSaliency(img.data, img.cols, img.rows, img.cols * img.channels());
 			imwrite("s_" + imgPath[i], sSaliency);
+			cout << "s_" + imgPath[i] << endl;
 		} else {
-			Mat sSaliency = spatialSaliency(img.data, img.cols, img.rows, img.cols * img.channels);
+			Mat sSaliency = spatialSaliency(img.data, img.cols, img.rows, img.cols * img.channels());
 			Mat tSaliency = temporalSaliency(preImg, img);
 			Mat blurSaliency = blurSpatialTemporal(sSaliency, tSaliency);
 			imwrite("s_" + imgPath[i], blurSaliency);
