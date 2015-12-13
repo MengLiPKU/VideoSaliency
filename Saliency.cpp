@@ -210,38 +210,52 @@ void feature_match_bidirection(ImageFeatures feat1, ImageFeatures feat2, Matches
 	vector<int> indice12, indice21;
 	getMatchIndex(feat1, matchInfo, indice12);
 	getMatchIndex(feat2, matchInfo21, indice21);
-
 	int nInliers = 0;
 	for(int i = 0; i < matchInfo.matches.size(); i++) {
 		if(matchInfo.inliers_mask[i]) {
-			if(indice21[matchInfo.matches[i].queryIdx] == matchInfo.matches[i].queryIdx) {
+			if(indice21[matchInfo.matches[i].trainIdx] == matchInfo.matches[i].queryIdx) {
 				nInliers++;
 			} else {
 				matchInfo.inliers_mask[i] = false;
 			}
 		}
 	}
-	cout << nInliers << endl;
 	matchInfo.num_inliers = nInliers;
 	matcher.collectGarbage();
 	matchInfo21.matches.clear();
 	matchInfo21.inliers_mask.clear();
 }
 
+Mat getTemporalSaliency(MatchesInfo matchInfo, Mat img, ImageFeatures feat1, ImageFeatures feat2) {
+	Mat tSaliency = Mat::zeros(img.rows, img.cols, CV_8UC1);
+	vector<Point2f> pointsPre;
+	vector<Point2f> pointsCur;
+	for(int i = 0; i < matchInfo.matches.size(); i++) {
+		if(matchInfo.inliers_mask[i]) {
+			const DMatch m = matchInfo.matches[i];
+			pointsPre.push_back(feat1.keypoints[m.queryIdx].pt);
+			pointsCur.push_back(feat2.keypoints[m.trainIdx].pt);
+		}	
+	}
+	int nInliers = 2;
+	while(nInliers != 1) {
+		Mat mask;
+		double ransacThreshold = 3.0;
+		Mat H = findHomography(pointsPre, pointsCur, CV_RANSAC, ransacThreshold, mask);
+
+	}
+}
+
 Mat temporalSaliency(Mat preImg, Mat img) {
-	Mat ans;
 	vector<ImageFeatures> feats(2);
 	Ptr<FeaturesFinder> finder = new SurfFeaturesFinder();
 	(*finder)(preImg, feats[0]);
 	(*finder)(img, feats[1]);
 	finder->collectGarbage();
-	cout << feats[0].keypoints.size() << " " << feats[1].keypoints.size() << endl;
-
-	Mat drawImg;
+	
 	MatchesInfo matchInfo;
 	feature_match_bidirection(feats[0], feats[1], matchInfo);
-	drawMatch(preImg, img, feats[0], feats[1], matchInfo, drawImg);
-	imwrite("test.jpg", drawImg);
+	Mat ans = getTemporalSaliency(matchInfo, img, feats[0], feats[1]);
 	return ans;
 }
 
