@@ -23,6 +23,21 @@
 using namespace cv;
 using namespace std;
 
+class homography {
+public:
+	vector<Point2f> inliers;
+	vector<Point2f> corresponding;
+	int size;
+	Mat H;
+	int maxX, maxY, minX, minY;
+	double aveSaliency;
+
+	homography() {
+		inliers.clear();
+		maxX = maxY = minX = minY = 0;
+	}
+};
+
 void saliencyDetect(vector<string> imgPath);
 Mat spatialSaliency(unsigned char *Src, int Width, int Height, int Stride);
 Mat temporalSaliency(Mat img1, Mat img2);

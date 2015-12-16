@@ -1,5 +1,7 @@
 ﻿#include "Saliency.h"
 #include "util.h"
+#include <limits.h>
+#include <math.h>
 
 using namespace cv::detail;
 
@@ -226,8 +228,25 @@ void feature_match_bidirection(ImageFeatures feat1, ImageFeatures feat2, Matches
 	matchInfo21.inliers_mask.clear();
 }
 
+void calDistance(vector<homography>& hvec) {
+	for(int i = 0; i < hvec.size(); i++) {     //每个单应,一次遍历所有点
+		double distance = 0; 
+		for(int j = 0; j < hvec.size(); j++) {        //每个单应
+			vector<Point2f> perspected;
+			perspectiveTransform(hvec[i].inliers, perspected, hvec[j].H);
+			for(int k = 0; k < perspected.size(); k++) {
+				distance = (hvec[i].corresponding[k].x - perspected[k].x) * (hvec[i].corresponding[k].x - perspected[k].x) + (hvec[i].corresponding[k].y - perspected[k].y)*(hvec[i].corresponding[k].y - perspected[k].y);
+				distance = sqrt(distance);
+				//printf("(%f, %f), (%f, %f)\n", hvec[i].corresponding[k].x, hvec[i].corresponding[k].y, perspected[k].x, perspected[k].y);
+			}
+		}
+		hvec[i].aveSaliency = distance / (1.0 * hvec[i].inliers.size());
+	}
+}
+
 Mat getTemporalSaliency(MatchesInfo matchInfo, Mat img, ImageFeatures feat1, ImageFeatures feat2) {
 	Mat tSaliency = Mat::zeros(img.rows, img.cols, CV_8UC1);
+	vector<int> visitMask;
 	vector<Point2f> pointsPre;
 	vector<Point2f> pointsCur;
 	for(int i = 0; i < matchInfo.matches.size(); i++) {
@@ -237,14 +256,52 @@ Mat getTemporalSaliency(MatchesInfo matchInfo, Mat img, ImageFeatures feat1, Ima
 			pointsCur.push_back(feat2.keypoints[m.trainIdx].pt);
 		}	
 	}
-	int nInliers = 2;
-	while(nInliers != 1) {
+	vector<homography> hvec;
+	while(pointsPre.size() > 4) {
+		homography curHomography;
 		Mat mask;
 		double ransacThreshold = 3.0;
 		Mat H = findHomography(pointsPre, pointsCur, CV_RANSAC, ransacThreshold, mask);
-
+		uchar* p = mask.ptr<uchar>(0);
+		int maxX = 0, maxY = 0, minX = INT_MAX, minY = INT_MAX;
+		for(int i = mask.rows - 1; i >= 0; i--) {
+			if((int)p[i]) {
+				maxX = max(maxX, pointsPre[i].x);
+				maxY = max(maxY, pointsPre[i].y);
+				minX = min(minX, pointsPre[i].x);
+				minY = min(minY, pointsPre[i].y);
+				curHomography.inliers.push_back(pointsPre[i]);
+				curHomography.corresponding.push_back(pointsCur[i]);
+				pointsPre.erase(pointsPre.begin() + i);
+				pointsCur.erase(pointsCur.begin() + i);
+			}
+		}
+		curHomography.minX = minX;
+		curHomography.maxX = maxX;
+		curHomography.minY = minY;
+		curHomography.maxY = maxY;
+		curHomography.H = H;
+		curHomography.size = (maxY - minY)*(maxX - minX);
+		hvec.push_back(curHomography);
 	}
-}
+	calDistance(hvec);
+/*	
+	for(int i = 0; i < hvec.size(); i++) {
+		int minX = hvec[i].minX, minY = hvec[i].minY, maxX = hvec[i].maxX, maxY = hvec[i].maxY;
+		cout << hvec[i].minX << " " << hvec[i].minY << " " << hvec[i].maxX << " " << hvec[i].maxY << endl; 
+		Mat test;
+		test.create(img.rows, img.cols, CV_8UC3);
+		img.copyTo(test(Rect(0, 0, img.cols, img.rows)));
+		line(test, Point(minX, minY), Point(minX, maxY), Scalar(0, 0, 255, 0));
+		line(test, Point(minX, minY), Point(maxX, minY), Scalar(0, 0, 255, 0));
+		line(test, Point(maxX, minY), Point(maxX, maxY), Scalar(0, 0, 255, 0));
+		line(test, Point(minX, maxY), Point(maxX, maxY), Scalar(0, 0, 255, 0));
+		imshow("test", test);
+		cvWaitKey(0);
+	}
+*/
+	return tSaliency;
+} 
 
 Mat temporalSaliency(Mat preImg, Mat img) {
 	vector<ImageFeatures> feats(2);
@@ -254,7 +311,9 @@ Mat temporalSaliency(Mat preImg, Mat img) {
 	finder->collectGarbage();
 	
 	MatchesInfo matchInfo;
-	feature_match_bidirection(feats[0], feats[1], matchInfo);
+	//feature_match_bidirection(feats[0], feats[1], matchInfo);
+	Mat drawImage;
+	drawMatch(preImg, img, feats[0], feats[1], matchInfo, drawImage);
 	Mat ans = getTemporalSaliency(matchInfo, img, feats[0], feats[1]);
 	return ans;
 }
