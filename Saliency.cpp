@@ -244,6 +244,7 @@ void calDistance(vector<homography>& hvec) {
 	}
 }
 
+int imageID =0 ;
 Mat getTemporalSaliency(MatchesInfo matchInfo, Mat img, ImageFeatures feat1, ImageFeatures feat2) {
 	Mat tSaliency = Mat::zeros(img.rows, img.cols, CV_8UC1);
 	vector<int> visitMask;
@@ -285,25 +286,27 @@ Mat getTemporalSaliency(MatchesInfo matchInfo, Mat img, ImageFeatures feat1, Ima
 		hvec.push_back(curHomography);
 	}
 	calDistance(hvec);
-/*	
+
+	Mat test;
+	test.create(img.rows, img.cols, CV_8UC3);
+	img.copyTo(test(Rect(0, 0, img.cols, img.rows)));
 	for(int i = 0; i < hvec.size(); i++) {
 		int minX = hvec[i].minX, minY = hvec[i].minY, maxX = hvec[i].maxX, maxY = hvec[i].maxY;
 		cout << hvec[i].minX << " " << hvec[i].minY << " " << hvec[i].maxX << " " << hvec[i].maxY << endl; 
-		Mat test;
-		test.create(img.rows, img.cols, CV_8UC3);
-		img.copyTo(test(Rect(0, 0, img.cols, img.rows)));
 		line(test, Point(minX, minY), Point(minX, maxY), Scalar(0, 0, 255, 0));
 		line(test, Point(minX, minY), Point(maxX, minY), Scalar(0, 0, 255, 0));
 		line(test, Point(maxX, minY), Point(maxX, maxY), Scalar(0, 0, 255, 0));
 		line(test, Point(minX, maxY), Point(maxX, maxY), Scalar(0, 0, 255, 0));
-		imshow("test", test);
-		cvWaitKey(0);
 	}
-*/
+	char writeName[20];
+	sprintf(writeName, "H_%d.jpg", imageID);
+	imageID++;
+	imwrite(writeName, test);
 	return tSaliency;
 } 
 
 Mat temporalSaliency(Mat preImg, Mat img) {
+/*
 	vector<ImageFeatures> feats(2);
 	Ptr<FeaturesFinder> finder = new SurfFeaturesFinder();
 	(*finder)(preImg, feats[0]);
@@ -311,11 +314,76 @@ Mat temporalSaliency(Mat preImg, Mat img) {
 	finder->collectGarbage();
 	
 	MatchesInfo matchInfo;
-	//feature_match_bidirection(feats[0], feats[1], matchInfo);
+	feature_match_bidirection(feats[0], feats[1], matchInfo);
 	Mat drawImage;
 	drawMatch(preImg, img, feats[0], feats[1], matchInfo, drawImage);
+	char writeName[20];
+	sprintf(writeName, "feature_%d.jpg", imageID);
+	imwrite(writeName, drawImage);
 	Mat ans = getTemporalSaliency(matchInfo, img, feats[0], feats[1]);
 	return ans;
+	*/
+	int minHessian = 1600;
+	vector<KeyPoint> keyPointsPre, keyPointsCur;
+	SurfFeatureDetector detector(minHessian);
+
+	detector.detect(preImg, keyPointsPre);
+	detector.detect(img, keyPointsCur);
+
+	SurfDescriptorExtractor extractor;
+	Mat desPre, desCur;
+	extractor.compute(preImg, keyPointsPre, desPre);
+	extractor.compute(img, keyPointsCur, desCur);
+
+	FlannBasedMatcher matcher;
+	vector<DMatch> matches;
+	matcher.match(desPre, desCur, matches);
+
+	double maxDist = 0, minDist = 100000;
+	for(int i = 0; i < matches.size(); i++) {
+		double dist = matches[i].distance;
+		maxDist = max(maxDist, dist);
+		minDist = min(minDist, dist);
+	}
+
+	vector<DMatch> goodMatch;
+	for(int i = 0; i < desPre.rows; i++) {
+		if(matches[i].distance < 5 * minDist) {
+			goodMatch.push_back(matches[i]);
+		}
+	}
+
+	vector<Point2f> pre;
+	vector<Point2f> cur;
+	for(int i = 0; i < goodMatch.size(); i++) {
+		pre.push_back(keyPointsPre[goodMatch[i].queryIdx].pt);
+		cur.push_back(keyPointsCur[goodMatch[i].trainIdx].pt);
+	}
+
+	Mat drawImg;
+	int row1 = preImg.rows;
+	int row2 = img.rows;
+	int col1 = preImg.cols;
+	int col2 = img.cols;
+	drawImg.create(max(row1, row2), col1 + col2, CV_8UC3);
+	preImg.copyTo(drawImg(Rect(0, 0, col1, row1)));
+	img.copyTo(drawImg(Rect(col1, 0, col2, row2)));
+	int numPts = pre.size();
+	int radius = 2;
+	Scalar colorPt = Scalar(255, 0, 0, 0);
+	Scalar colorLine = Scalar(0, 0, 255, 0);
+
+	for(int i = 0; i < numPts; i++) {
+		circle(drawImg, Point(pre[i]), radius, colorPt, radius);
+		circle(drawImg, Point(cur[i])+Point(col1, 0), radius, colorPt, radius);
+		line(drawImg, Point(pre[i]), Point(cur[i])+Point(col1, 0), colorLine);
+	}
+
+	char writeName[20];
+	sprintf(writeName, "o_%d.jpg", imageID);
+	imageID++;
+	imwrite(writeName, drawImg);
+	return drawImg;
 }
 
 Mat blurSpatialTemporal(Mat sSaliency, Mat tSaliency) {

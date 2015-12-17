@@ -54,7 +54,5 @@ void drawMatch(Mat img1, Mat img2, ImageFeatures feat1, ImageFeatures feat2, Mat
 		circle(drawImg, Point(dstPts[i])+Point(col1, 0), radius, colorPt, radius);
 		line(drawImg, Point(srcPts[i]), Point(dstPts[i])+Point(col1, 0), colorLine);
 	}
-	imshow("test", drawImg);
-	cvWaitKey(0);
 }
 
