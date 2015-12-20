@@ -25,18 +25,7 @@ vector<string> getImagePath(string dirPath, bool subDir) {
 	return ans;
 }
 
-void drawMatch(Mat img1, Mat img2, ImageFeatures feat1, ImageFeatures feat2, MatchesInfo matchInfo, Mat& drawImg) {
-	vector<Point2f> srcPts, dstPts;
-	for(int i = 0; i < matchInfo.matches.size(); i++) {
-		const DMatch& m = matchInfo.matches[i];
-		Point2f p1 = feat1.keypoints[m.queryIdx].pt;
-		Point2f p2 = feat2.keypoints[m.trainIdx].pt;
-		if(matchInfo.inliers_mask[i]) {
-			srcPts.push_back(p1);
-			dstPts.push_back(p2);
-		}
-	}
-
+void drawMatch(Mat img1, Mat img2, vector<Point2f> srcPts, vector<Point2f> dstPts, Mat& drawImg) {
 	int row1 = img1.rows;
 	int row2 = img2.rows;
 	int col1 = img1.cols;

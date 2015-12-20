@@ -12,6 +12,6 @@ using namespace cv;
 using namespace cv::detail;
 
 vector<string> getImagePath(string dirPath, bool subDir);
-void drawMatch(Mat img1, Mat img2, ImageFeatures feat1, ImageFeatures feat2, MatchesInfo matchInfo, Mat& drawImg);
+void drawMatch(Mat img1, Mat img2, vector<Point2f> srcPts, vector<Point2f> dstPrts, Mat& drawImg);
 
 #endif
