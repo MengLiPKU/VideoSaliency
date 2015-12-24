@@ -180,6 +180,7 @@ Mat spatialSaliency(unsigned char *src, int width, int height, int stride)
 
 void calDistance(vector<homography>& hvec, int intimageSize) {
 	double imageSize = double(intimageSize);
+	double maxSal = 0;
 	for(int i = 0; i < hvec.size(); i++) {     //每个单应,一次计算所有点的透视变换
 		double distance = 0; 
 		for(int j = 0; j < hvec.size(); j++) {        //每个单应
@@ -191,7 +192,15 @@ void calDistance(vector<homography>& hvec, int intimageSize) {
 				//printf("(%f, %f), (%f, %f)\n", hvec[i].corresponding[k].x, hvec[i].corresponding[k].y, perspected[k].x, perspected[k].y);
 			}
 		}
-		hvec[i].aveSaliency = distance / (1.0 * hvec[i].inliers.size());
+		hvec[i].aveSaliency = distance / (1.0 * hvec[i].inliers.size() * hvec[i].size);
+		maxSal = max(maxSal, hvec[i].aveSaliency);
+	}
+	if(hvec.size() == 1) {
+		hvec[0].aveSaliency = 0;
+		return;
+	}
+	for(int i = 0; i < hvec.size(); i++) {
+		hvec[i].aveSaliency = 128 * (hvec[i].aveSaliency / maxSal);
 	}
 }
 
@@ -203,7 +212,7 @@ Mat getTemporalSaliency(Mat img, vector<Point2f> pointsPre, vector<Point2f> poin
 	while(pointsPre.size() > 4) {
 		homography curHomography;
 		Mat mask;
-		double ransacThreshold = 10.0;
+		double ransacThreshold = 15.0;
 		Mat H = findHomography(pointsPre, pointsCur, CV_RANSAC, ransacThreshold, mask);
 		uchar* p = mask.ptr<uchar>(0);
 		int maxX = 0, maxY = 0, minX = INT_MAX, minY = INT_MAX;
@@ -245,14 +254,15 @@ Mat getTemporalSaliency(Mat img, vector<Point2f> pointsPre, vector<Point2f> poin
 	imwrite(writeName, test);
 
 	for(int i = 0; i < hvec.size(); i++) {
-		cout << hvec[i].aveSaliency << endl;
+		cout << hvec[i].aveSaliency << " " << hvec[i].size << endl;
 		for(int j = hvec[i].minX; j < hvec[i].maxX; j++) {
 			for(int k = hvec[i].minY; k < hvec[i].maxY; k++) {
-				tSaliency.at<uchar>(k, j) += 2 * hvec[i].aveSaliency;
+				if(tSaliency.at<uchar>(k, j) == 0)
+					tSaliency.at<uchar>(k, j) = max(tSaliency.at<uchar>(k, j), hvec[i].aveSaliency);
 			}
 		}
 	}
-	sprintf(writeName, "S_%d.jpg", imageID);
+	sprintf(writeName, "S_%d.jpg", imageID); 
 	imwrite(writeName, tSaliency);
 	imageID++;
 
@@ -260,7 +270,7 @@ Mat getTemporalSaliency(Mat img, vector<Point2f> pointsPre, vector<Point2f> poin
 } 
 
 Mat temporalSaliency(Mat preImg, Mat img) {
-	int minHessian = 1600;
+	int minHessian = 400;
 	vector<KeyPoint> keyPointsPre, keyPointsCur;
 	SurfFeatureDetector detector(minHessian);
 	detector.detect(preImg, keyPointsPre);
@@ -304,7 +314,12 @@ Mat temporalSaliency(Mat preImg, Mat img) {
 }
 
 Mat blurSpatialTemporal(Mat sSaliency, Mat tSaliency) {
-	Mat ans;
+	Mat ans = Mat(sSaliency.rows, sSaliency.cols, CV_8UC1);
+	for(int i = 0; i < sSaliency.rows; i++) {
+		for(int j = 0; j < sSaliency.cols; j++) {
+			ans.at<uchar>(i, j) = min(0.9*sSaliency.at<uchar>(i, j) + 0.1*tSaliency.at<uchar>(i, j), 255);
+		}
+	}
 	return ans;
 }
 
@@ -314,13 +329,14 @@ void saliencyDetect(vector<string> imgPath) {
 		cout << imgPath[i] << endl;
 		Mat img = imread(imgPath[i]);
 		if(i == 0) {
-			//Mat sSaliency = spatialSaliency(img.data, img.cols, img.rows, img.cols * img.channels());
-			//imwrite("s_" + imgPath[i], sSaliency);
+			Mat sSaliency = spatialSaliency(img.data, img.cols, img.rows, img.cols * img.channels());
+			imwrite("s_" + to_string(i) + ".jpg", sSaliency);
 		} else {
-			//Mat sSaliency = spatialSaliency(img.data, img.cols, img.rows, img.cols * img.channels());
+			Mat sSaliency = spatialSaliency(img.data, img.cols, img.rows, img.cols * img.channels());
 			Mat tSaliency = temporalSaliency(preImg, img);
-			//Mat blurSaliency = blurSpatialTemporal(sSaliency, tSaliency);
-			//imwrite("s_" + imgPath[i], blurSaliency);
+			Mat blurSaliency = blurSpatialTemporal(sSaliency, tSaliency);
+			imwrite("s_" + to_string(i) + ".jpg", tSaliency);
+			imwrite("blur_" + to_string(i) + ".jpg", blurSaliency);
 		}
 		preImg = img;
 	}
