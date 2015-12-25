@@ -4,7 +4,6 @@
 int main() {
 	string inputPath;
 	cin >> inputPath;
-	vector<string> imagePath = getImagePath(inputPath, 0);
-	saliencyDetect(imagePath);
+	saliencyDetect(inputPath);
 	system("pause");
 }

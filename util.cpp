@@ -8,7 +8,7 @@ vector<string> getImagePath(string dirPath, bool subDir) {
 	HANDLE h = FindFirstFileA(dir_spec.c_str(), &f);
 	if(h != INVALID_HANDLE_VALUE) {
 		do {
-			ans.push_back(dirPath + "/" + string(f.cFileName));
+			ans.push_back(string(f.cFileName));
 		}while(FindNextFileA(h, &f));
 	}
 	FindClose(h);
@@ -17,7 +17,7 @@ vector<string> getImagePath(string dirPath, bool subDir) {
 	h = FindFirstFileA(dir_spec.c_str(), &f);
 	if(h != INVALID_HANDLE_VALUE) {
 		do {
-			ans.push_back(dirPath + "/" + string(f.cFileName));
+			ans.push_back(string(f.cFileName));
 		}while(FindNextFileA(h, &f));
 	}
 	FindClose(h);

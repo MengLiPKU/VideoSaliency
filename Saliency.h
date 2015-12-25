@@ -38,7 +38,7 @@ public:
 	}
 };
 
-void saliencyDetect(vector<string> imgPath);
+void saliencyDetect(string curDir);
 Mat spatialSaliency(unsigned char *Src, int Width, int Height, int Stride);
 Mat temporalSaliency(Mat img1, Mat img2);
 Mat blurSpatialTemporal(Mat sSaliency, Mat tSaliency);

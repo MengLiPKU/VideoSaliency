@@ -5,6 +5,7 @@
 
 using namespace cv::detail;
 
+string curDir;
 void RGBtoLAB(unsigned char* Src, vector<double>& lvec, vector<double>& avec, vector<double>& bvec, int width) {
 	for(int i = 0; i < width; i++) {
 		int sR = (int)(Src[3*i+2]);
@@ -249,21 +250,17 @@ Mat getTemporalSaliency(Mat img, vector<Point2f> pointsPre, vector<Point2f> poin
 		line(test, Point(maxX, minY), Point(maxX, maxY), Scalar(0, 0, 255, 0));
 		line(test, Point(minX, maxY), Point(maxX, maxY), Scalar(0, 0, 255, 0));
 	}
-	char writeName[20];
-	sprintf(writeName, "H_%d.jpg", imageID);
-	imwrite(writeName, test);
+	imwrite(curDir + "/saliency/Homography_" + to_string(imageID) + ".jpg", test);
 
 	for(int i = 0; i < hvec.size(); i++) {
 		cout << hvec[i].aveSaliency << " " << hvec[i].size << endl;
 		for(int j = hvec[i].minX; j < hvec[i].maxX; j++) {
 			for(int k = hvec[i].minY; k < hvec[i].maxY; k++) {
-				if(tSaliency.at<uchar>(k, j) == 0)
-					tSaliency.at<uchar>(k, j) = max(tSaliency.at<uchar>(k, j), hvec[i].aveSaliency);
+				tSaliency.at<uchar>(k, j) = max(tSaliency.at<uchar>(k, j), hvec[i].aveSaliency);
 			}
 		}
 	}
-	sprintf(writeName, "S_%d.jpg", imageID); 
-	imwrite(writeName, tSaliency);
+	imwrite(curDir + "/saliency/temporal_" + to_string(imageID) + ".jpg", tSaliency);
 	imageID++;
 
 	return tSaliency;
@@ -306,9 +303,7 @@ Mat temporalSaliency(Mat preImg, Mat img) {
 	}
 	Mat drawMat;
 	drawMatch(preImg, img, goodPointsPre, goodPointsCur, drawMat);
-	char writeName[20];
-	sprintf(writeName, "O_%d.jpg", imageID);
-	imwrite(writeName, drawMat);
+	imwrite(curDir + "/saliency/O_" + to_string(imageID) + ".jpg", drawMat);
 	Mat ans = getTemporalSaliency(preImg, goodPointsPre, goodPointsCur);
  	return ans;
 }
@@ -317,26 +312,28 @@ Mat blurSpatialTemporal(Mat sSaliency, Mat tSaliency) {
 	Mat ans = Mat(sSaliency.rows, sSaliency.cols, CV_8UC1);
 	for(int i = 0; i < sSaliency.rows; i++) {
 		for(int j = 0; j < sSaliency.cols; j++) {
-			ans.at<uchar>(i, j) = min(0.9*sSaliency.at<uchar>(i, j) + 0.1*tSaliency.at<uchar>(i, j), 255);
+			ans.at<uchar>(i, j) = min(sSaliency.at<uchar>(i, j) + 0.1*tSaliency.at<uchar>(i, j), 255);
 		}
 	}
 	return ans;
 }
 
-void saliencyDetect(vector<string> imgPath) {
+void saliencyDetect(string dir) {
+	curDir = dir;
+	vector<string> imgPath = getImagePath(dir, 0);
 	Mat preImg;
 	for(int i = 0; i < imgPath.size(); i++) {
-		cout << imgPath[i] << endl;
-		Mat img = imread(imgPath[i]);
+		cout << dir + "/" + imgPath[i] << endl;
+		Mat img = imread(dir + "/" + imgPath[i]);
 		if(i == 0) {
 			Mat sSaliency = spatialSaliency(img.data, img.cols, img.rows, img.cols * img.channels());
-			imwrite("s_" + to_string(i) + ".jpg", sSaliency);
+			imwrite(dir + "/saliency/spatial_" + to_string(i) + ".jpg", sSaliency);
 		} else {
 			Mat sSaliency = spatialSaliency(img.data, img.cols, img.rows, img.cols * img.channels());
 			Mat tSaliency = temporalSaliency(preImg, img);
 			Mat blurSaliency = blurSpatialTemporal(sSaliency, tSaliency);
-			imwrite("s_" + to_string(i) + ".jpg", tSaliency);
-			imwrite("blur_" + to_string(i) + ".jpg", blurSaliency);
+			imwrite(dir + "/saliency/spatial_" + to_string(i) + ".jpg", sSaliency);
+			imwrite(dir + "/saliency/blur_" + to_string(i) + ".jpg", blurSaliency);
 		}
 		preImg = img;
 	}
