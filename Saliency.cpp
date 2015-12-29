@@ -5,6 +5,10 @@
 
 using namespace cv::detail;
 
+#define RANSACTHRESHOLD 15
+#define DISTANCERATIO 10
+#define SIZERATIOTHRES 0.65
+
 string curDir;
 void RGBtoLAB(unsigned char* Src, vector<double>& lvec, vector<double>& avec, vector<double>& bvec, int width) {
 	for(int i = 0; i < width; i++) {
@@ -196,7 +200,8 @@ void calDistance(vector<homography>& hvec, int intimageSize) {
 		hvec[i].aveSaliency = distance / (1.0 * hvec[i].inliers.size() * hvec[i].size);
 		maxSal = max(maxSal, hvec[i].aveSaliency);
 	}
-	if(hvec.size() == 1) {
+	
+	if(hvec.size() == 1 && hvec[0].size / (1.0*intimageSize) > SIZERATIOTHRES) {
 		hvec[0].aveSaliency = 0;
 		return;
 	}
@@ -213,8 +218,7 @@ Mat getTemporalSaliency(Mat img, vector<Point2f> pointsPre, vector<Point2f> poin
 	while(pointsPre.size() > 4) {
 		homography curHomography;
 		Mat mask;
-		double ransacThreshold = 15.0;
-		Mat H = findHomography(pointsPre, pointsCur, CV_RANSAC, ransacThreshold, mask);
+		Mat H = findHomography(pointsPre, pointsCur, CV_RANSAC, RANSACTHRESHOLD, mask);
 		uchar* p = mask.ptr<uchar>(0);
 		int maxX = 0, maxY = 0, minX = INT_MAX, minY = INT_MAX;
 		for(int i = mask.rows - 1; i >= 0; i--) {
@@ -269,11 +273,13 @@ Mat getTemporalSaliency(Mat img, vector<Point2f> pointsPre, vector<Point2f> poin
 Mat temporalSaliency(Mat preImg, Mat img) {
 	int minHessian = 400;
 	vector<KeyPoint> keyPointsPre, keyPointsCur;
+	//SiftDescriptorExtractor detector;
 	SurfFeatureDetector detector(minHessian);
 	detector.detect(preImg, keyPointsPre);
 	detector.detect(img, keyPointsCur);
 
 	SurfDescriptorExtractor extractor;
+	//SiftDescriptorExtractor extractor;
 	Mat desPre, desCur;
 	extractor.compute(preImg, keyPointsPre, desPre);
 	extractor.compute(img, keyPointsCur, desCur);
@@ -289,6 +295,9 @@ Mat temporalSaliency(Mat preImg, Mat img) {
 	}
 
 	vector<DMatch> goodMatch;
+	double gap = maxDist - minDist;
+	cout << maxDist << " " << minDist << endl;
+
 	for(int i = 0; i < desPre.rows; i++) {
 		if(matches[i].distance < 5 * minDist) {
 			goodMatch.push_back(matches[i]);
